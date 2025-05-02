@@ -1,74 +1,74 @@
-import sqlite3
+import mysql.connector
 
 class BankAccount:
     def __init__(self, user_id):
         self.user_id = user_id
-        self.conn = sqlite3.connect('bank.db')
+        self.conn = mysql.connector.connect(
+            host="localhost",
+            user="your_user",
+            password="your_password",
+            database="banking"
+        )
         self.cursor = self.conn.cursor()
         self.create_table()
 
     def create_table(self):
-         # Create the accounts table if it doesn't exist
+        # You can remove this if you already created tables using schema.sql
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS accounts (
-                user_id TEXT PRIMARY KEY,
-                balance REAL DEFAULT 0.0
+                user_id VARCHAR(255) PRIMARY KEY,
+                balance DECIMAL(10, 2) DEFAULT 0.00
             )
         ''')
-
-        # Create the transactions table if it doesn't exist
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                amount REAL,
-                type TEXT,  -- 'deposit' or 'withdraw'
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(255),
+                amount DECIMAL(10, 2),
+                type ENUM('deposit', 'withdraw'),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES accounts(user_id)
             )
         ''')
         self.conn.commit()
 
     def create_account(self):
-        self.cursor.execute('INSERT OR IGNORE INTO accounts (user_id, balance) VALUES (?, ?)', (self.user_id, 0.0))
+        self.cursor.execute(
+            'INSERT IGNORE INTO accounts (user_id, balance) VALUES (%s, %s)',
+            (self.user_id, 0.0)
+        )
         self.conn.commit()
 
     def deposit(self, amount):
-        # Step 1: Update balance in the accounts table
         self.cursor.execute(
-            'UPDATE accounts SET balance = balance + ? WHERE user_id = ?',
+            'UPDATE accounts SET balance = balance + %s WHERE user_id = %s',
             (amount, self.user_id)
         )
-
-        # Step 2: Insert a transaction record
         self.cursor.execute(
-            'INSERT INTO transactions (user_id, amount, type) VALUES (?, ?, ?)',
+            'INSERT INTO transactions (user_id, amount, type) VALUES (%s, %s, %s)',
             (self.user_id, amount, 'deposit')
         )
-
         self.conn.commit()
-
 
     def withdraw(self, amount):
         current_balance = self.get_balance()
         if amount <= current_balance:
-            # Step 1: Subtract from balance
             self.cursor.execute(
-                'UPDATE accounts SET balance = balance - ? WHERE user_id = ?',
+                'UPDATE accounts SET balance = balance - %s WHERE user_id = %s',
                 (amount, self.user_id)
             )
-
-            # Step 2: Record the withdrawal
             self.cursor.execute(
-                'INSERT INTO transactions (user_id, amount, type) VALUES (?, ?, ?)',
+                'INSERT INTO transactions (user_id, amount, type) VALUES (%s, %s, %s)',
                 (self.user_id, amount, 'withdraw')
             )
-
             self.conn.commit()
         else:
             print("Insufficient funds.")
 
-
     def get_balance(self):
-        self.cursor.execute('SELECT balance FROM accounts WHERE user_id = ?', (self.user_id,))
+        self.cursor.execute(
+            'SELECT balance FROM accounts WHERE user_id = %s',
+            (self.user_id,)
+        )
         result = self.cursor.fetchone()
         return result[0] if result else 0.0
